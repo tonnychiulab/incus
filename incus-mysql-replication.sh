@@ -243,20 +243,26 @@ wait_for_container() {
 }
 
 # ---------- 建立容器（若不存在）並指派靜態 IP ----------
+# 新容器：init（建立但不啟動）→ 設定靜態 IP → start，第一次開機即帶正確 IP，
+# 不需要 restart，避免「優雅關機逾時」並且不會打斷 cloud-init。
 ensure_container() {
     local name=$1
     local ip=$2
     if incus list "$name" --format csv | grep -q "^$name,"; then
-        log "容器 $name 已存在，沿用。"
+        log "容器 $name 已存在，套用靜態 IP $ip 並強制重啟以生效…"
+        incus config device override "$name" eth0 ipv4.address="$ip" 2>/dev/null \
+            || incus config device set "$name" eth0 ipv4.address "$ip"
+        # 既有容器才需重啟，用 -f 強制關機，避免優雅關機逾時
+        incus restart -f "$name"
     else
-        log "建立容器 $name (鏡像 $MYSQL_IMAGE)，首次需下載鏡像，請稍候…"
-        incus launch "$MYSQL_IMAGE" "$name" -c security.nesting=true -c limits.memory=2GB
-        ok "容器 $name 已建立。"
+        log "建立容器 $name (鏡像 $MYSQL_IMAGE)，先建立不啟動以套用靜態 IP，首次需下載鏡像…"
+        incus init "$MYSQL_IMAGE" "$name" -c security.nesting=true -c limits.memory=2GB
+        log "指派靜態 IP $ip 給 $name…"
+        incus config device override "$name" eth0 ipv4.address="$ip"
+        log "啟動容器 $name…"
+        incus start "$name"
+        ok "容器 $name 已建立並啟動。"
     fi
-    log "指派靜態 IP $ip 給 $name 並重啟以套用…"
-    incus config device override "$name" eth0 ipv4.address="$ip" 2>/dev/null \
-        || incus config device set "$name" eth0 ipv4.address "$ip"
-    incus restart "$name"
     wait_for_container "$name" "$ip"
 }
 
