@@ -1,0 +1,18 @@
+cluster:
+  network: auto                 # 不填或 auto 則自動偵測（目前僅支援 /24）
+  image: images:ubuntu/24.04/cloud
+  database: myappdb
+master:
+  name: mysql-master
+  ip: auto                      # 或指定，如 10.172.106.2
+slaves:
+  - { name: mysql-slave-1, ip: auto, role: read }
+  - { name: mysql-slave-2, ip: auto, role: read }
+proxy:
+  enabled: false                # ProxySQL 於下一增量實作；先設 false
+  name: proxysql
+  ip: auto
+  read_write_split: true
+credentials:
+  repl_user: replicator
+  # 密碼一律走 cluster.secrets 或環境變數，不放這裡
